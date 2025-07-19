@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Forest Fire Demo",
+			"type": "shell",
+			"command": "/Users/dimitri/Documents/Projects/AI/RL/forest-firefighter/.venv/bin/python",
+			"args": [
+				"demo.py"
+			],
+			"group": "build",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
