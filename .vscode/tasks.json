@@ -11,6 +11,28 @@
 			"group": "build",
 			"isBackground": false,
 			"problemMatcher": []
+		},
+		{
+			"label": "Run Performance Benchmark",
+			"type": "shell",
+			"command": "/Users/dimitri/Documents/Projects/AI/RL/forest-firefighter/.venv/bin/python",
+			"args": [
+				"benchmark.py"
+			],
+			"group": "test",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Train Optimized Agent",
+			"type": "shell",
+			"command": "/Users/dimitri/Documents/Projects/AI/RL/forest-firefighter/.venv/bin/python",
+			"args": [
+				"agent.py"
+			],
+			"group": "build",
+			"isBackground": true,
+			"problemMatcher": []
 		}
 	]
 }

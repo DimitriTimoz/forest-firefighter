@@ -12,7 +12,7 @@ class ForestFireEnv(gym.Env):
     
     metadata = {"render_modes": ["human"], "render_fps": 4}
     
-    def __init__(self, grid_size=15, fire_spread_prob=0.1, max_steps=100):
+    def __init__(self, grid_size=15, fire_spread_prob=0.1, max_steps=200):
         super().__init__()
         
         self.grid_size = grid_size
@@ -128,18 +128,20 @@ class ForestFireEnv(gym.Env):
         return obs, reward, terminated, truncated, info
     
     def _suppress_fire(self):
-        """Suppress fires around firefighter position with larger radius"""
+        """Suppress fires around firefighter position with larger radius - optimized"""
         x, y = self.firefighter_pos
-        fires_suppressed = 0
         
-        # Check 5x5 area around firefighter (increased from 3x3)
-        for dx in [-2, -1, 0, 1, 2]:
-            for dy in [-2, -1, 0, 1, 2]:
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < self.grid_size and 0 <= ny < self.grid_size:
-                    if self.grid[nx, ny] == 2:  # fire
-                        self.grid[nx, ny] = 0  # extinguish to empty (burned area)
-                        fires_suppressed += 1
+        # Vectorized approach for better performance
+        x_min, x_max = max(0, x-2), min(self.grid_size, x+3)
+        y_min, y_max = max(0, y-2), min(self.grid_size, y+3)
+        
+        # Get the suppression area
+        suppression_area = self.grid[x_min:x_max, y_min:y_max]
+        fire_mask = (suppression_area == 2)
+        fires_suppressed = np.sum(fire_mask)
+        
+        # Extinguish fires in the area
+        self.grid[x_min:x_max, y_min:y_max][fire_mask] = 0
         
         return fires_suppressed
     
@@ -163,20 +165,16 @@ class ForestFireEnv(gym.Env):
         self.grid[new_fires] = 2
     
     def _get_obs(self):
-        """Get one-hot encoded observation with firefighter marked"""
-        # Create one-hot encoded observation (4 channels: empty, forest, fire, firefighter)
+        """Get one-hot encoded observation with firefighter marked - optimized"""
+        # Pre-allocate observation array
         obs = np.zeros((4, self.grid_size, self.grid_size), dtype=np.float32)
         
-        # Channel 0: empty/burned areas
-        obs[0] = (self.grid == 0).astype(np.float32)
+        # Vectorized channel creation
+        obs[0] = (self.grid == 0)  # empty/burned areas
+        obs[1] = (self.grid == 1)  # forest areas  
+        obs[2] = (self.grid == 2)  # fire areas
         
-        # Channel 1: forest areas
-        obs[1] = (self.grid == 1).astype(np.float32)
-        
-        # Channel 2: fire areas
-        obs[2] = (self.grid == 2).astype(np.float32)
-        
-        # Channel 3: firefighter position
+        # Firefighter position
         obs[3, self.firefighter_pos[0], self.firefighter_pos[1]] = 1.0
         
         return obs
