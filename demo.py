@@ -6,7 +6,7 @@ from forest_fire_rl import ForestFireEnv
 
 def random_policy(obs):
     """Random policy for demonstration"""
-    return np.random.randint(0, 6)
+    return np.random.randint(0, 5)  # 5 actions: up, down, left, right, wait
 
 def demo():
     """Run a simple demo"""

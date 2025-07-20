@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from scipy.ndimage import convolve
 
-
 class ForestFireEnv(gym.Env):
     """Minimalist forest fire environment"""
     
@@ -21,8 +20,9 @@ class ForestFireEnv(gym.Env):
         self.max_steps = max_steps
         
         # Spaces
-        self.action_space = spaces.Discrete(6)  # up, down, left, right, suppress, wait
-        self.observation_space = spaces.Box(0, 3, (grid_size, grid_size), dtype=np.int32)
+        self.action_space = spaces.Discrete(5)  # up, down, left, right, wait
+        # One-hot encoded observation: (4 channels, height, width) for [empty, forest, fire, firefighter]
+        self.observation_space = spaces.Box(0, 1, (4, grid_size, grid_size), dtype=np.float32)
         
         # State
         self.grid = None
@@ -48,10 +48,24 @@ class ForestFireEnv(gym.Env):
         # Add initial fire in center
         center = self.grid_size // 2
         self.grid[center, center] = 2
+        # Reduce initial fire spread to make task more manageable
+        self._spread_fire()
+        self._spread_fire()
+        self._spread_fire()
+        self._spread_fire()
+
+        # Place firefighter randomly, but not too close to the fire
+        while True:
+            self.firefighter_pos = self.np_random.integers(0, self.grid_size, size=2)
+            # Ensure firefighter is at least 3 cells away from the center fire
+            dist_to_fire = np.abs(self.firefighter_pos - center).max()
+            if dist_to_fire >= 3:  # Manhattan distance of at least 3
+                break
         
-        # Place firefighter randomly
-        self.firefighter_pos = self.np_random.integers(0, self.grid_size, size=2)
         self.step_count = 0
+        
+        # Reset fire count tracking for reward calculation
+        self.prev_fire_count = np.sum(self.grid == 2)
         
         obs = self._get_obs()
         return obs, {}
@@ -70,27 +84,43 @@ class ForestFireEnv(gym.Env):
             self.firefighter_pos[1] -= 1
         elif action == 3 and self.firefighter_pos[1] < self.grid_size - 1:  # right
             self.firefighter_pos[1] += 1
-        elif action == 4:  # suppress fire
-            reward += self._suppress_fire()
-        # action 5 = wait (do nothing)
+
+        # action 4 = wait (do nothing)
         
-        # Spread fire
-        self._spread_fire()
+        # Suppress fire first, then spread (gives firefighter advantage)
+        fires_suppressed = self._suppress_fire()
+        
+        # Only spread fire every few steps to balance the game
+        if self.step_count % 2 == 0:  # Spread fire every 2 steps instead of every step
+            self._spread_fire()
         
         # Calculate reward
         fire_count = np.sum(self.grid == 2)
         forest_count = np.sum(self.grid == 1)
         
-        reward += forest_count * 0.1  # reward for preserving forest
-        reward -= fire_count * 0.2    # penalty for active fires
-        reward -= 0.01                # time penalty
+        # Store previous fire count for reward calculation
+        if not hasattr(self, 'prev_fire_count'):
+            self.prev_fire_count = fire_count
+            
+        # Reward based on change in fire count (encourage fire reduction)
+        fire_change = self.prev_fire_count - fire_count
+        reward = fire_change * 100.0  # reward for reducing fires
         
-        # Check termination
-        terminated = fire_count == 0  # all fires out
-        truncated = self.step_count >= self.max_steps
+        # Small penalty for fires remaining (much smaller than before)
+        reward -= fire_count * 0.1
         
+        # Small reward for staying alive
+        reward += 1.0
+        
+        # Big bonus for extinguishing all fires
+        terminated = fire_count == 0
         if terminated:
-            reward += 50.0  # bonus for success
+            reward += 1000.0
+            
+        # Update previous fire count
+        self.prev_fire_count = fire_count
+        
+        truncated = self.step_count >= self.max_steps
         
         obs = self._get_obs()
         info = {'fire_count': fire_count, 'forest_count': forest_count}
@@ -98,20 +128,20 @@ class ForestFireEnv(gym.Env):
         return obs, reward, terminated, truncated, info
     
     def _suppress_fire(self):
-        """Suppress fires around firefighter position"""
-        reward = 0.0
+        """Suppress fires around firefighter position with larger radius"""
         x, y = self.firefighter_pos
+        fires_suppressed = 0
         
-        # Check 3x3 area around firefighter
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
+        # Check 5x5 area around firefighter (increased from 3x3)
+        for dx in [-2, -1, 0, 1, 2]:
+            for dy in [-2, -1, 0, 1, 2]:
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < self.grid_size and 0 <= ny < self.grid_size:
                     if self.grid[nx, ny] == 2:  # fire
-                        self.grid[nx, ny] = 0  # extinguish to empty
-                        reward += 10.0
+                        self.grid[nx, ny] = 0  # extinguish to empty (burned area)
+                        fires_suppressed += 1
         
-        return reward
+        return fires_suppressed
     
     def _spread_fire(self):
         """Kernel-based fire spreading using convolution"""
@@ -133,9 +163,22 @@ class ForestFireEnv(gym.Env):
         self.grid[new_fires] = 2
     
     def _get_obs(self):
-        """Get observation with firefighter marked"""
-        obs = self.grid.copy()
-        obs[self.firefighter_pos[0], self.firefighter_pos[1]] = 3  # mark firefighter
+        """Get one-hot encoded observation with firefighter marked"""
+        # Create one-hot encoded observation (4 channels: empty, forest, fire, firefighter)
+        obs = np.zeros((4, self.grid_size, self.grid_size), dtype=np.float32)
+        
+        # Channel 0: empty/burned areas
+        obs[0] = (self.grid == 0).astype(np.float32)
+        
+        # Channel 1: forest areas
+        obs[1] = (self.grid == 1).astype(np.float32)
+        
+        # Channel 2: fire areas
+        obs[2] = (self.grid == 2).astype(np.float32)
+        
+        # Channel 3: firefighter position
+        obs[3, self.firefighter_pos[0], self.firefighter_pos[1]] = 1.0
+        
         return obs
     
     def render(self, mode="human"):
@@ -149,8 +192,11 @@ class ForestFireEnv(gym.Env):
         colors = ['#8B4513', '#228B22', '#FF4500', '#0000FF']
         cmap = ListedColormap(colors)
         
-        obs = self._get_obs()
-        im = self.ax.imshow(obs, cmap=cmap, vmin=0, vmax=3)
+        # Create visualization grid from current state
+        vis_grid = self.grid.copy()
+        vis_grid[self.firefighter_pos[0], self.firefighter_pos[1]] = 3  # mark firefighter
+        
+        im = self.ax.imshow(vis_grid, cmap=cmap, vmin=0, vmax=3)
         
         # Add legend
         legend_elements = [
