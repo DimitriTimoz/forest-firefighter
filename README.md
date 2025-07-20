@@ -1,44 +1,64 @@
-# Forest Fire RL Environment
+# Forest Fire Fighting with Reinforcement Learning 🔥🚁
 
-A minimalist Gymnasium-compatible reinforcement learning environment for forest fire simulation.
+## Objective
 
-## Features
+This project models forest fire fighting using reinforcement learning techniques. The goal is to train an intelligent agent (firefighter) to effectively combat and extinguish forest fires in a simulated 2D grid environment.
 
-- **Simple 2D Grid**: Forest fire spreading with basic dynamics
-- **Gymnasium Compatible**: Standard RL environment interface  
-- **Basic Visualization**: Matplotlib-based rendering
-- **Minimal Dependencies**: Only numpy, gymnasium, matplotlib
+## Overview
 
-## Quick Start
-
-```bash
-pip install -r requirements.txt
-python demo.py
-```
-
-## Usage
-
-```python
-from forest_fire_rl import ForestFireEnv
-
-env = ForestFireEnv(grid_size=15, fire_spread_prob=0.1)
-obs, info = env.reset()
-
-for _ in range(100):
-    action = env.action_space.sample()  # 0-5: up, down, left, right, suppress, wait
-    obs, reward, done, truncated, info = env.step(action)
-    env.render()
-    if done:
-        break
-
-env.close()
-```
+The project implements a Deep Q-Network (DQN) agent that learns to navigate a forest environment and strategically suppress fires before they spread uncontrollably. The agent must balance between moving efficiently toward fires and maximizing fire suppression effectiveness.
 
 ## Environment
 
-- **Grid**: 0=empty, 1=forest, 2=fire, 3=firefighter
-- **Actions**: Move (0-3), Suppress fire (4), Wait (5)  
-- **Reward**: +10 for suppressing fire, +0.1 per forest cell, -0.2 per fire
-- **Goal**: Extinguish all fires while preserving forest
+### Forest Fire Environment Features
+- **Grid-based simulation**: 2D grid representing forest terrain
+- **Dynamic fire spreading**: Fires spread probabilistically to neighboring forest cells
+- **Firefighter agent**: Controllable agent that can move and suppress fires
+- **Real-time visualization**: Visual rendering of the environment state
 
-Total code: ~200 lines
+### State Space
+- **4-channel observation**: One-hot encoded representation
+  - Channel 0: Empty/burned areas
+  - Channel 1: Forest areas
+  - Channel 2: Active fires
+  - Channel 3: Firefighter position
+
+### Action Space
+- **5 discrete actions**:
+  - 0: Move up
+  - 1: Move down
+  - 2: Move left
+  - 3: Move right
+  - 4: Wait/stay in place
+
+
+### Training Algorithm
+- **Algorithm**: Deep Q-Learning with Experience Replay
+- **Target Network**: Soft updates with τ = 0.01
+- **Experience Replay**: Buffer size of 10,000 transitions
+- **Exploration**: ε-greedy with decay from 0.9 to 0.05
+
+## Key Features
+
+### Fire Suppression Mechanics
+- **Suppression radius**: 5×5 area around firefighter
+- **Immediate effect**: Fires are extinguished to burned areas
+- **Strategic positioning**: Agent must position itself optimally
+
+### Fire Spreading Dynamics
+- **Kernel-based spreading**: Probabilistic fire propagation using convolution
+- **Balanced gameplay**: Fire spreads every 2 steps (not every step)
+- **Realistic behavior**: Higher spread probability near existing fires
+
+## Future Improvements
+
+- [ ] Multi-agent coordination (multiple firefighters)
+- [ ] Heterogeneous terrain (water bodies, roads, urban areas)
+- [ ] Wind effects on fire spreading
+- [ ] Resource constraints (water/fuel limitations)
+- [ ] Real-world fire behavior modeling
+- [ ] Climate change effects on fire dynamics
+
+---
+
+*Simulating intelligent forest fire fighting to protect our natural environments* 🌲🔥🚁
